@@ -21,7 +21,7 @@ void on_rx_interrupt()
     // Read the data to clear the receive interrupt.
     if (serial_port.read(&c, 1)) {
         // Echo the input back to the terminal.
-        serial_port.write(&c, 1);
+        serial_port.write("#", 1);
     }
 }
 
