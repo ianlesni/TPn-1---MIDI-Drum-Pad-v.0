@@ -5,36 +5,45 @@
 
 #include "mbed.h"
 
+#define WAIT_TIME_MS 500 
+
 // Create a DigitalOutput object to toggle an LED whenever data is received.
 static DigitalOut led(LED1);
-
+  
 // Create a UnbufferedSerial object with a default baud rate.
 static UnbufferedSerial serial_port(USBTX, USBRX);
 
-void on_rx_interrupt()
-{
-    char c;
-
-    // Toggle the LED.
-    led = !led;
-
-    // Read the data to clear the receive interrupt.
-    if (serial_port.read(&c, 1)) {
-        // Echo the input back to the terminal.
-        serial_port.write("#", 1);
-    }
-}
+char comando = 0x90;
+uint8_t nota = 0x60;
+uint8_t velocity = 0x64;
+uint8_t velocity_off = 0x00;
 
 int main(void)
 {
+    DigitalIn tecla(D2);
+    tecla.mode(PullDown);
     // Set desired properties (9600-8-N-1).
     serial_port.baud(9600);
-    serial_port.format(
-        /* bits */ 8,
-        /* parity */ SerialBase::None,
-        /* stop bit */ 1
-    );
+    serial_port.format(8,SerialBase::None,1);
+    
+    
+    while (true)
+    {
 
-    // Register a callback to process a Rx (receive) interrupt.
-    serial_port.attach(&on_rx_interrupt, SerialBase::RxIrq);
+        if(tecla == 1)
+        {
+             serial_port.write(&comando, 1);
+             serial_port.write(&nota, 1);
+             serial_port.write(&velocity, 1);
+
+            led = !led;
+            thread_sleep_for(WAIT_TIME_MS);
+             
+             serial_port.write(&comando, 1);
+             serial_port.write(&nota, 1);
+             serial_port.write(&velocity_off, 1);
+
+        }
+    }
+
 }
