@@ -56,6 +56,7 @@ int main(void)
     serialPort.format(8,SerialBase::None,1);
 
     outputsInit();
+    calculateSlopeIntercept();
     
     serialPort.write("MIDI DrumPad",12);
     while (true)
