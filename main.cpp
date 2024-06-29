@@ -15,14 +15,13 @@
 
 
 #define MAX_VEL 127
-#define MIN_VEL 1
+#define MIN_VEL 50 //Con velocitys más bajas apenas se escucha
 #define PIEZO_MAX_PEAK_VOLT_mV 2000 //Máximo valor registrado( golpe muy fuerte) para este piezo
-#define PIEZO_THRESHOLD_mV 300 
+#define PIEZO_THRESHOLD_mV 90 
 
 //=====[Declaration and initialization of public global objects]===============
 AnalogIn piezo(A0);
 
-DigitalIn B1_USER(BUTTON1);
 static DigitalOut ledPad(LED1);// Create a DigitalOutput object to toggle an LED whenever data is received.
   
 static UnbufferedSerial serialPort(USBTX, USBRX);// Create a UnbufferedSerial object with a default baud rate.
@@ -57,7 +56,7 @@ int main(void)
 
     outputsInit();
     calculateSlopeIntercept();
-    
+
     serialPort.write("MIDI DrumPad",12);
     while (true)
     {
@@ -66,25 +65,20 @@ int main(void)
 
         if(piezoRead  > PIEZO_THRESHOLD_mV)
         {
-           ledPad = 1;
-           piezoMax = piezoSearchMax();
-           velocity = piezoVoltToVel(piezoMax);  
-           serialPort.write(&velocity, 1);
-           ledPad = 0;         
+            ledPad = 1;
+            piezoMax = piezoSearchMax();
+            velocity = piezoVoltToVel(piezoMax);  
+            ledPad = 0;    
+            //Apago el golpe anterior
+            serialPort.write(&command, 1);
+            serialPort.write(&note, 1);
+            serialPort.write(&velocityOff, 1);
+            //Mando el golpe actual
+            serialPort.write(&command, 1);
+            serialPort.write(&note, 1);
+            serialPort.write(&velocity, 1);     
         }
 
-        //if (button == 1) {
-         // serialPort.write(&command, 1);
-         // serialPort.write(&note, 1);
-         // serialPort.write(&velocity, 1);
-
-          
-         // thread_sleep_for(WAIT_TIME_MS);
-
-        //  serialPort.write(&command, 1);
-        //  serialPort.write(&note, 1);
-        //  serialPort.write(&velocityOff, 1);
-        //}
     }
 
 }
@@ -99,8 +93,8 @@ void calculateSlopeIntercept()
     uint16_t deltaVel = MAX_VEL - MIN_VEL; // Delta de velocidad
     uint16_t deltaVolt = PIEZO_MAX_PEAK_VOLT_mV - PIEZO_THRESHOLD_mV; // Delta de voltaje
 
-    slope = (float)deltaVel / deltaVolt;
-    intercept = MIN_VEL - PIEZO_THRESHOLD_mV * slope;
+    slope = (float)deltaVel / deltaVolt; //Calculo de pendiente
+    intercept = MIN_VEL - PIEZO_THRESHOLD_mV * slope; //Calculo ordenada al origen
 }
 
 float piezoSearchMax()
@@ -109,16 +103,16 @@ float piezoSearchMax()
     float piezoSample = 0.0;
     int i = 0;
 
-    for(i = 0; i < NUMBER_OF_PIEZO_SAMPLES; i++)
+    for(i = 0; i < NUMBER_OF_PIEZO_SAMPLES; i++) //Muestreo el golpe detectado
     {
         piezoSample = piezo.read();
-        piezoSample = piezoSample*3.3*1000;
+        piezoSample = piezoSample*3.3*1000; //Convierto la lectura a mV
 
-         if(piezoSample > piezoMaxValue)
+         if(piezoSample > piezoMaxValue) //Busco el máximo valor del golpe
         {
             piezoMaxValue = piezoSample;
         }
-        wait_us(SAMPLE_TIME_INTERVAL_uS);
+        wait_us(SAMPLE_TIME_INTERVAL_uS); 
     }
     
     return piezoMaxValue;
@@ -130,7 +124,7 @@ uint8_t piezoVoltToVel (float piezoMaxValue)
     uint8_t vel = 0;
     float velFloat = 0.0;
 
-    velFloat = piezoMaxValue*slope + intercept; 
+    velFloat = piezoMaxValue*slope + intercept; //Calculo el parametro velocity
     
     vel = (uint8_t)roundf(velFloat);
     if (vel > MAX_VEL) vel = MAX_VEL;
