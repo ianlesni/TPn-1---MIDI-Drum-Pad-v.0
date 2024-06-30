@@ -15,7 +15,7 @@
 
 
 #define MAX_VEL 127
-#define MIN_VEL 50 //Con velocitys más bajas apenas se escucha
+#define MIN_VEL 45//Con velocitys más bajas apenas se escucha
 #define PIEZO_MAX_PEAK_VOLT_mV 2000 //Máximo valor registrado( golpe muy fuerte) para este piezo
 #define PIEZO_THRESHOLD_mV 90 
 
@@ -32,6 +32,8 @@ uint8_t note = 0x60;
 uint8_t velocity = 0x64;
 uint8_t velocityOff = 0x00;
 
+typedef enum{ NOTE_ON = 0x90,NOTE_OFF = 0x80}MIDI_MSGS;
+
 float piezoMax = 0.0;
 float piezoRead = 0.0;
 uint8_t piezoTestInt = 0;
@@ -39,11 +41,40 @@ uint8_t piezoTestInt = 0;
 float slope = 0.0;
 float intercept = 0.0;
 
+
+typedef enum{
+    KICK = 36,
+    SNARE = 38,
+    SIDE_STICK = 37,
+    HI_HAT_CLOSED = 42,
+    HI_HAT_HALF_OPEN = 44,
+    HI_HAT_OPEN = 46,
+    HH_Pedal_CHICK = 65,
+    TOM_HI = 48,
+    TOM_MID = 45,
+    TOM_LOW = 41,
+    RIDE = 51,
+    BELL = 53,
+    CRASH_L = 49,
+    CRASH_R = 57,
+    CRASH_R_CHOKED = 58,
+    CHINA = 52,
+    SPLASH = 55
+}INSTRUMENT_NOTES;
+uint8_t noteIndex = 0;
+uint8_t instrumentNote[] = {KICK,SNARE,SIDE_STICK,HI_HAT_CLOSED,HI_HAT_HALF_OPEN,
+                            HI_HAT_OPEN,HH_Pedal_CHICK,TOM_HI,TOM_MID,TOM_LOW,RIDE,
+                            BELL,CRASH_L,CRASH_R,CRASH_R_CHOKED,CHINA,SPLASH};
+
 //=====[Declarations (prototypes) of public functions]=========================
 void outputsInit();
 void calculateSlopeIntercept(void);
 float piezoSearchMax();
-uint8_t piezoVoltToVel (float piezoMaxValue);
+uint8_t piezoConvertVoltToVel (float piezoMaxValue);
+void MIDISendNoteOn(uint8_t note,uint8_t velocity);
+void MIDISendNoteOff(uint8_t note);
+
+
 
 
 //=====[Main function, the program entry point after power on or reset]========
@@ -57,27 +88,23 @@ int main(void)
     outputsInit();
     calculateSlopeIntercept();
 
-    serialPort.write("MIDI DrumPad",12);
     while (true)
     {
+
         piezoRead = piezo.read();
         piezoRead = piezoRead*3.3*1000;
-
         if(piezoRead  > PIEZO_THRESHOLD_mV)
         {
             ledPad = 1;
             piezoMax = piezoSearchMax();
-            velocity = piezoVoltToVel(piezoMax);  
+            velocity = piezoConvertVoltToVel(piezoMax);  
             ledPad = 0;    
-            //Apago el golpe anterior
-            serialPort.write(&command, 1);
-            serialPort.write(&note, 1);
-            serialPort.write(&velocityOff, 1);
-            //Mando el golpe actual
-            serialPort.write(&command, 1);
-            serialPort.write(&note, 1);
-            serialPort.write(&velocity, 1);     
+            
+            MIDISendNoteOff(instrumentNote[noteIndex]);//Apago el golpe anterior
+
+            MIDISendNoteOn(instrumentNote[noteIndex],velocity);//Mando el golpe actual
         }
+        
 
     }
 
@@ -119,7 +146,7 @@ float piezoSearchMax()
 
 }
 
-uint8_t piezoVoltToVel (float piezoMaxValue)
+uint8_t piezoConvertVoltToVel (float piezoMaxValue)
 {
     uint8_t vel = 0;
     float velFloat = 0.0;
@@ -131,4 +158,20 @@ uint8_t piezoVoltToVel (float piezoMaxValue)
     if (vel < MIN_VEL) vel = MIN_VEL;
 
     return vel; 
+}
+void MIDISendNoteOn(uint8_t note,uint8_t velocity)
+{
+    uint8_t command = NOTE_ON;
+    serialPort.write(&command, 1);
+    serialPort.write(&note, 1);
+    serialPort.write(&velocity, 1); 
+}
+
+void MIDISendNoteOff(uint8_t note)
+{
+    uint8_t command = NOTE_ON;
+    uint8_t velocityOff = 0x00;
+    serialPort.write(&command, 1);
+    serialPort.write(&note, 1);
+    serialPort.write(&velocityOff, 1);
 }
