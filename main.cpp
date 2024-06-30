@@ -27,10 +27,7 @@ static DigitalOut ledPad(LED1);// Create a DigitalOutput object to toggle an LED
 static UnbufferedSerial serialPort(USBTX, USBRX);// Create a UnbufferedSerial object with a default baud rate.
 
 //=====[Declaration and initialization of public global variables]=============
-char command = 0x90;
-uint8_t note = 0x60;
-uint8_t velocity = 0x64;
-uint8_t velocityOff = 0x00;
+uint8_t piezoMaxVelocity = 0x64;
 
 typedef enum{ NOTE_ON = 0x90,NOTE_OFF = 0x80}MIDI_MSGS;
 
@@ -87,6 +84,8 @@ int main(void)
 
     outputsInit();
     calculateSlopeIntercept();
+    uint8_t numOfInstrumentNotes = sizeof(instrumentNote) / sizeof(instrumentNote[0]);
+
 
     while (true)
     {
@@ -97,14 +96,19 @@ int main(void)
         {
             ledPad = 1;
             piezoMax = piezoSearchMax();
-            velocity = piezoConvertVoltToVel(piezoMax);  
+            piezoMaxVelocity = piezoConvertVoltToVel(piezoMax);  
             ledPad = 0;    
             
             MIDISendNoteOff(instrumentNote[noteIndex]);//Apago el golpe anterior
 
-            MIDISendNoteOn(instrumentNote[noteIndex],velocity);//Mando el golpe actual
+            MIDISendNoteOn(instrumentNote[noteIndex],piezoMaxVelocity);//Mando el golpe actual
         }
         
+        if(B1_USER == 1)
+        {
+           noteIndex++;
+           if(noteIndex > numOfInstrumentNotes) noteIndex = 0; 
+        }
 
     }
 
