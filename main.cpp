@@ -15,7 +15,7 @@
 
 
 #define MAX_VEL 127
-#define MIN_VEL 45//Con velocitys más bajas apenas se escucha
+#define MIN_VEL 45//Con valores de velocitys más bajos apenas se escucha
 #define PIEZO_MAX_PEAK_VOLT_mV 2000 //Máximo valor registrado( golpe muy fuerte) para este piezo
 #define PIEZO_THRESHOLD_mV 90 
 
@@ -27,11 +27,9 @@ static DigitalOut ledPad(LED1);// Create a DigitalOutput object to toggle an LED
 static UnbufferedSerial serialPort(USBTX, USBRX);// Create a UnbufferedSerial object with a default baud rate.
 
 //=====[Declaration and initialization of public global variables]=============
-uint8_t piezoMaxVelocity = 0x64;
-
-typedef enum{ NOTE_ON = 0x90,NOTE_OFF = 0x80}MIDI_MSGS;
 
 float piezoMax = 0.0;
+uint8_t piezoMaxVelocity = 0x00;
 float piezoRead = 0.0;
 uint8_t piezoTestInt = 0;
 
@@ -39,6 +37,7 @@ float slope = 0.0;
 float intercept = 0.0;
 
 
+typedef enum{ NOTE_ON = 0x90,NOTE_OFF = 0x80}MIDI_MSGS;
 typedef enum{
     KICK = 36,
     SNARE = 38,
@@ -70,9 +69,6 @@ float piezoSearchMax();
 uint8_t piezoConvertVoltToVel (float piezoMaxValue);
 void MIDISendNoteOn(uint8_t note,uint8_t velocity);
 void MIDISendNoteOff(uint8_t note);
-
-
-
 
 //=====[Main function, the program entry point after power on or reset]========
 int main(void)
