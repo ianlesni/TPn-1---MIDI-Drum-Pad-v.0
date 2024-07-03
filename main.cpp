@@ -23,6 +23,9 @@
 AnalogIn piezo(A0);
 
 static DigitalOut ledPad(LED1);// Create a DigitalOutput object to toggle an LED whenever data is received.
+
+DigitalIn upButton(BUTTON1);
+DigitalIn downButton(D2);
   
 static UnbufferedSerial serialPort(USBTX, USBRX);// Create a UnbufferedSerial object with a default baud rate.
 
@@ -62,10 +65,15 @@ uint8_t instrumentNote[] = {KICK,SNARE,SIDE_STICK,HI_HAT_CLOSED,HI_HAT_HALF_OPEN
                             HI_HAT_OPEN,HH_Pedal_CHICK,TOM_HI,TOM_MID,TOM_LOW,RIDE,
                             BELL,CRASH_L,CRASH_R,CRASH_R_CHOKED,CHINA,SPLASH};
 
+uint8_t upButtonState = 0;
+uint8_t downButtonState = 0;
+
 //=====[Declarations (prototypes) of public functions]=========================
-void outputsInit();
+void inputsInit(void);
+void outputsInit(void);
 void calculateSlopeIntercept(void);
-float piezoSearchMax();
+void piezoUpdate(void);
+float piezoSearchMax(void);
 uint8_t piezoConvertVoltToVel (float piezoMaxValue);
 void MIDISendNoteOn(uint8_t note,uint8_t velocity);
 void MIDISendNoteOff(uint8_t note);
@@ -73,11 +81,12 @@ void MIDISendNoteOff(uint8_t note);
 //=====[Main function, the program entry point after power on or reset]========
 int main(void)
 {
-    DigitalIn B1_USER(BUTTON1);
+
     // Set desired properties (9600-8-N-1).
     serialPort.baud(9600);
     serialPort.format(8,SerialBase::None,1);
-
+    
+    inputsInit();
     outputsInit();
     calculateSlopeIntercept();
     uint8_t numOfInstrumentNotes = sizeof(instrumentNote) / sizeof(instrumentNote[0]);
@@ -85,7 +94,49 @@ int main(void)
 
     while (true)
     {
+        piezoUpdate();
+        
+        upButtonState = upButton.read();
+        if(upButtonState == 0)
+        {
+           noteIndex++;
+           if(noteIndex >= numOfInstrumentNotes) noteIndex = 0; 
+        }
 
+        downButtonState = downButton.read();         
+        if(downButton == 0)
+        {
+            if (noteIndex == 0) noteIndex = numOfInstrumentNotes - 1;
+            else noteIndex--;
+        }
+        
+
+    }
+
+}
+
+//=====[Implementations of public functions]===================================
+void inputsInit()
+{
+    upButton.mode(PullUp);
+    downButton.mode(PullUp);
+
+}
+
+void outputsInit()
+{
+    ledPad = 0;
+}
+void calculateSlopeIntercept()
+{
+    uint16_t deltaVel = MAX_VEL - MIN_VEL; // Delta de velocidad
+    uint16_t deltaVolt = PIEZO_MAX_PEAK_VOLT_mV - PIEZO_THRESHOLD_mV; // Delta de voltaje
+
+    slope = (float)deltaVel / deltaVolt; //Calculo de pendiente
+    intercept = MIN_VEL - PIEZO_THRESHOLD_mV * slope; //Calculo ordenada al origen
+}
+void piezoUpdate()
+{
         piezoRead = piezo.read();
         piezoRead = piezoRead*3.3*1000;
         if(piezoRead  > PIEZO_THRESHOLD_mV)
@@ -99,31 +150,7 @@ int main(void)
 
             MIDISendNoteOn(instrumentNote[noteIndex],piezoMaxVelocity);//Mando el golpe actual
         }
-        
-        if(B1_USER == 1)
-        {
-           noteIndex++;
-           if(noteIndex > numOfInstrumentNotes) noteIndex = 0; 
-        }
-
-    }
-
 }
-
-//=====[Implementations of public functions]===================================
-void outputsInit()
-{
-    ledPad = 0;
-}
-void calculateSlopeIntercept()
-{
-    uint16_t deltaVel = MAX_VEL - MIN_VEL; // Delta de velocidad
-    uint16_t deltaVolt = PIEZO_MAX_PEAK_VOLT_mV - PIEZO_THRESHOLD_mV; // Delta de voltaje
-
-    slope = (float)deltaVel / deltaVolt; //Calculo de pendiente
-    intercept = MIN_VEL - PIEZO_THRESHOLD_mV * slope; //Calculo ordenada al origen
-}
-
 float piezoSearchMax()
 {
     float piezoMaxValue = 0.0;
