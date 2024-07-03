@@ -8,17 +8,16 @@
 
 //=====[Defines]===============================================================
 
-
 #define NUMBER_OF_PIEZO_SAMPLES 400 
 #define SAMPLE_FREQ_Hz 40000
 #define SAMPLE_TIME_INTERVAL_uS 25
-
 
 #define MAX_VEL 127
 #define MIN_VEL 45//Con valores de velocitys más bajos apenas se escucha
 #define PIEZO_MAX_PEAK_VOLT_mV 2000 //Máximo valor registrado( golpe muy fuerte) para este piezo
 #define PIEZO_THRESHOLD_mV 90 
 
+#define DEBOUNCE_DELAY_MS 30
 //=====[Declaration and initialization of public global objects]===============
 AnalogIn piezo(A0);
 
@@ -67,6 +66,8 @@ uint8_t instrumentNote[] = {KICK,SNARE,SIDE_STICK,HI_HAT_CLOSED,HI_HAT_HALF_OPEN
 
 uint8_t upButtonState = 0;
 uint8_t downButtonState = 0;
+uint8_t upButtonLastState = 1;
+uint8_t downButtonLastState = 1;
 
 //=====[Declarations (prototypes) of public functions]=========================
 void inputsInit(void);
@@ -77,6 +78,7 @@ float piezoSearchMax(void);
 uint8_t piezoConvertVoltToVel (float piezoMaxValue);
 void MIDISendNoteOn(uint8_t note,uint8_t velocity);
 void MIDISendNoteOff(uint8_t note);
+void buttonUpdate(DigitalIn* button);
 
 //=====[Main function, the program entry point after power on or reset]========
 int main(void)
@@ -96,11 +98,20 @@ int main(void)
     {
         piezoUpdate();
         
-        upButtonState = upButton.read();
-        if(upButtonState == 0)
+        uint8_t currentUpButtonState = upButton.read();
+        if (currentUpButtonState != upButtonLastState)
         {
-           noteIndex++;
-           if(noteIndex >= numOfInstrumentNotes) noteIndex = 0; 
+            wait_us(DEBOUNCE_DELAY_MS * 1000); 
+            if (currentUpButtonState == upButton.read()) 
+            {
+                upButtonState = currentUpButtonState;
+                if (upButtonState == 0)
+                {
+                    noteIndex++;
+                    if (noteIndex >= numOfInstrumentNotes) noteIndex = 0; 
+                }
+            }
+            upButtonLastState = currentUpButtonState;
         }
 
         downButtonState = downButton.read();         
@@ -120,6 +131,10 @@ void inputsInit()
 {
     upButton.mode(PullUp);
     downButton.mode(PullUp);
+}
+
+void buttonUpdate(DigitalIn* button)
+{
 
 }
 
