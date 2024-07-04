@@ -31,7 +31,7 @@ uint8_t piezoMaxVelocity = 0x64;
 
 typedef enum{ NOTE_ON = 0x90,NOTE_OFF = 0x80}MIDI_MSGS;
 
-float piezoMax = 0.0;
+float piezoMax = 0.0; //Piezo max value
 float piezoRead = 0.0;
 uint8_t piezoTestInt = 0;
 
