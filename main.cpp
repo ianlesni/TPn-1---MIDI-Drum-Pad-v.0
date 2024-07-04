@@ -14,14 +14,11 @@
 #define SAMPLE_TIME_INTERVAL_uS 25 
 
 #define MAX_VEL 127
-#define MIN_VEL 30//Con velocitys más bajas apenas se escucha
+#define MIN_VEL 25//Con velocitys más bajas apenas se escucha
 #define DELTA_VEL (MAX_VEL - MIN_VEL)
 #define PIEZO_MAX_PEAK_VOLT_mV 2000 //Máximo valor registrado( golpe muy fuerte) para este piezo
 #define PIEZO_THRESHOLD_mV 90 //Nivel por encima del piso de ruido
 #define DELTA_VOLT (PIEZO_MAX_PEAK_VOLT_mV - PIEZO_THRESHOLD_mV)
-#define SLOPE (DELTA_VEL/DELTA_VEL)
-#define INTERCEPT (MIN_VEL - PIEZO_THRESHOLD_mV * SLOPE)
-
 
 //=====[Declaration and initialization of public global objects]===============
 AnalogIn piezo(A0);
@@ -69,14 +66,11 @@ uint8_t instrumentNote[] = {KICK,SNARE,SIDE_STICK,HI_HAT_CLOSED,HI_HAT_HALF_OPEN
 typedef enum{LED_ON = 1, LED_OFF = 0}LED_STATE;
 typedef enum{BUTTON_PRESSED = 1, BUTTON_RELEASED = 0}BUTTON_STATE;
 
-//typedef struct{
-//    DigitalIn alias;
-//   uint8_t currentState;
-//    uint8_t lastState;
-//}button_t;
-
-//button_t * upButton;
-//button_t * downButton;
+typedef struct{
+    DigitalIn* alias;
+    uint8_t currentState;
+    uint8_t lastState;
+}button_t;
 
 uint8_t upButtonCurrentState = 0;
 uint8_t upButtonLastState = 0;
@@ -91,12 +85,16 @@ uint8_t piezoConvertVoltToVel (float piezoMaxValue);
 void MIDISendNoteOn(uint8_t note,uint8_t velocity);
 void MIDISendNoteOff(uint8_t note);
 void piezoUpdate(void);
+uint8_t buttonUpdate(button_t* button);
 
 //=====[Main function, the program entry point after power on or reset]========
 int main(void)
 {
     DigitalIn upButton(BUTTON1);
     DigitalIn downButton(D1);
+
+    button_t upButtonStruct {&upButton,BUTTON_RELEASED,BUTTON_RELEASED};
+    button_t downButtonStruct {&downButton,BUTTON_RELEASED,BUTTON_RELEASED};
     // Set desired properties (9600-8-N-1).
     serialPort.baud(9600);
     serialPort.format(8,SerialBase::None,1);
@@ -110,34 +108,16 @@ int main(void)
 
         piezoUpdate();
         
-        upButtonCurrentState = upButton.read();
-        if (upButtonCurrentState != upButtonLastState)
+        if(buttonUpdate(&upButtonStruct) == BUTTON_PRESSED)
         {
-            wait_us(DEBOUNCE_DELAY_MS * 1000); 
-            if (upButtonCurrentState == upButton.read()) 
-            {
-                if (upButtonCurrentState == 1)
-                {
-                    noteIndex++;
-                    if (noteIndex >= numOfInstrumentNotes) noteIndex = 0; 
-                }
-            }
-            upButtonLastState = upButtonCurrentState;
+            noteIndex++;
+            if (noteIndex >= numOfInstrumentNotes) noteIndex = 0; 
         }
 
-        downButtonCurrentState = downButton.read();
-        if (downButtonCurrentState != downButtonLastState)
+        if(buttonUpdate(&downButtonStruct) == BUTTON_PRESSED)
         {
-            wait_us(DEBOUNCE_DELAY_MS * 1000); 
-            if (downButtonCurrentState == downButton.read()) 
-            {
-                if (downButtonCurrentState == 1)
-                {
-                    noteIndex--;
-                    if (noteIndex < 0) noteIndex = numOfInstrumentNotes - 1; 
-                }
-            }
-            downButtonLastState = downButtonCurrentState;
+            noteIndex--;
+            if (noteIndex < 0) noteIndex = numOfInstrumentNotes - 1;  
         }
 
     }
@@ -145,16 +125,28 @@ int main(void)
 }
 
 //=====[Implementations of public functions]===================================
+uint8_t buttonUpdate(button_t* button)
+{
+    button->currentState = button->alias->read();
+    if (button->currentState != button->lastState)
+    {
+        wait_us(DEBOUNCE_DELAY_MS * 1000); 
+        if (button->currentState == button->alias->read()) //Si efectivamente se presionó
+        {
+                button->lastState = button->currentState;
+                return  button->currentState;//El boton efectivamente cambió de estado y devuelve el estado          
+        }      
+    }
+    return 3;//Hubo un bounce
+}
+
 void outputsInit()
 {
     ledPad = 0;
 }
 void calculateSlopeIntercept()
 {
-    uint16_t deltaVel = MAX_VEL - MIN_VEL; // Delta de velocidad
-    uint16_t deltaVolt = PIEZO_MAX_PEAK_VOLT_mV - PIEZO_THRESHOLD_mV; // Delta de voltaje
-
-    slope = (float)deltaVel / deltaVolt; //Calculo de pendiente
+    slope = (float)DELTA_VEL / DELTA_VOLT; //Calculo de pendiente
     intercept = MIN_VEL - PIEZO_THRESHOLD_mV * slope; //Calculo ordenada al origen
 }
 void piezoUpdate()
@@ -198,7 +190,7 @@ uint8_t piezoConvertVoltToVel (float piezoMaxValue)
     uint8_t vel = 0;
     float velFloat = 0.0;
 
-    velFloat = piezoMaxValue* SLOPE + INTERCEPT; //Calculo el parametro velocity
+    velFloat = piezoMaxValue* slope + intercept; //Calculo el parametro velocity
     
     vel = (uint8_t)roundf(velFloat);
     if (vel > MAX_VEL) vel = MAX_VEL;
