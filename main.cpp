@@ -7,17 +7,21 @@
 #include <cstdint>
 
 //=====[Defines]===============================================================
-#define DEBOUNCE_DELAY_MS 30
+#define DEBOUNCE_DELAY_MS 30 //Tiempo tipico de debounce
 
 #define NUMBER_OF_PIEZO_SAMPLES 400 
 #define SAMPLE_FREQ_Hz 40000
-#define SAMPLE_TIME_INTERVAL_uS 25
-
+#define SAMPLE_TIME_INTERVAL_uS 25 
 
 #define MAX_VEL 127
 #define MIN_VEL 30//Con velocitys más bajas apenas se escucha
+#define DELTA_VEL (MAX_VEL - MIN_VEL)
 #define PIEZO_MAX_PEAK_VOLT_mV 2000 //Máximo valor registrado( golpe muy fuerte) para este piezo
-#define PIEZO_THRESHOLD_mV 90 
+#define PIEZO_THRESHOLD_mV 90 //Nivel por encima del piso de ruido
+#define DELTA_VOLT (PIEZO_MAX_PEAK_VOLT_mV - PIEZO_THRESHOLD_mV)
+#define SLOPE (DELTA_VEL/DELTA_VEL)
+#define INTERCEPT (MIN_VEL - PIEZO_THRESHOLD_mV * SLOPE)
+
 
 //=====[Declaration and initialization of public global objects]===============
 AnalogIn piezo(A0);
@@ -37,7 +41,6 @@ uint8_t piezoTestInt = 0;
 
 float slope = 0.0;
 float intercept = 0.0;
-
 
 typedef enum{
     KICK = 36,
@@ -63,6 +66,18 @@ uint8_t instrumentNote[] = {KICK,SNARE,SIDE_STICK,HI_HAT_CLOSED,HI_HAT_HALF_OPEN
                             HI_HAT_OPEN,HH_Pedal_CHICK,TOM_HI,TOM_MID,TOM_LOW,RIDE,
                             BELL,CRASH_L,CRASH_R,CRASH_R_CHOKED,CHINA,SPLASH};
 
+typedef enum{LED_ON = 1, LED_OFF = 0}LED_STATE;
+typedef enum{BUTTON_PRESSED = 1, BUTTON_RELEASED = 0}BUTTON_STATE;
+
+//typedef struct{
+//    DigitalIn alias;
+//   uint8_t currentState;
+//    uint8_t lastState;
+//}button_t;
+
+//button_t * upButton;
+//button_t * downButton;
+
 uint8_t upButtonCurrentState = 0;
 uint8_t upButtonLastState = 0;
 uint8_t downButtonCurrentState = 0;
@@ -77,8 +92,6 @@ void MIDISendNoteOn(uint8_t note,uint8_t velocity);
 void MIDISendNoteOff(uint8_t note);
 void piezoUpdate(void);
 
-
-
 //=====[Main function, the program entry point after power on or reset]========
 int main(void)
 {
@@ -91,7 +104,6 @@ int main(void)
     outputsInit();
     calculateSlopeIntercept();
     uint8_t numOfInstrumentNotes = sizeof(instrumentNote) / sizeof(instrumentNote[0]);
-
 
     while (true)
     {
@@ -148,12 +160,12 @@ void calculateSlopeIntercept()
 void piezoUpdate()
 {
     piezoRead = piezo.read();
-    piezoRead = piezoRead*3.3*1000;
-    if(piezoRead  > PIEZO_THRESHOLD_mV)
+    piezoRead = piezoRead*3.3*1000; //Convierto la lectura en mV
+    if(piezoRead  > PIEZO_THRESHOLD_mV) //Compara contra el threshold 
     {
         ledPad = 1;
-        piezoMax = piezoSearchMax();
-        piezoMaxVelocity = piezoConvertVoltToVel(piezoMax);  
+        piezoMax = piezoSearchMax(); //Busco el valor máximo de tensión del golpe
+        piezoMaxVelocity = piezoConvertVoltToVel(piezoMax);  //Transformo a velocidad el valor máximo
         ledPad = 0;            
         MIDISendNoteOff(instrumentNote[noteIndex]);//Apago el golpe anterior
         MIDISendNoteOn(instrumentNote[noteIndex],piezoMaxVelocity);//Mando el golpe actual
@@ -164,9 +176,8 @@ float piezoSearchMax()
 {
     float piezoMaxValue = 0.0;
     float piezoSample = 0.0;
-    int i = 0;
 
-    for(i = 0; i < NUMBER_OF_PIEZO_SAMPLES; i++) //Muestreo el golpe detectado
+    for(int i = 0; i < NUMBER_OF_PIEZO_SAMPLES; i++) //Muestreo el golpe detectado
     {
         piezoSample = piezo.read();
         piezoSample = piezoSample*3.3*1000; //Convierto la lectura a mV
@@ -187,7 +198,7 @@ uint8_t piezoConvertVoltToVel (float piezoMaxValue)
     uint8_t vel = 0;
     float velFloat = 0.0;
 
-    velFloat = piezoMaxValue*slope + intercept; //Calculo el parametro velocity
+    velFloat = piezoMaxValue* SLOPE + INTERCEPT; //Calculo el parametro velocity
     
     vel = (uint8_t)roundf(velFloat);
     if (vel > MAX_VEL) vel = MAX_VEL;
